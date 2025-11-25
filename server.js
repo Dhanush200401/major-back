@@ -725,6 +725,8 @@ const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
 const cookieParser = require("cookie-parser");
 const cookie = require("cookie");
+const RoomHistory = require("./models/RoomHistory");
+
 
 const app = express();
 
@@ -785,6 +787,34 @@ const io = new Server(server, {
 const fileRoutes = require("./routes/fileRoutes")(io);
 const authRoutes = require("./routes/auth");
 const roomRoutes = require("./routes/roomRoutes");
+
+
+app.get("/api/rooms/:roomId/history", async (req, res) => {
+   console.log("🔥 HISTORY ROUTE HIT:", req.params.roomId);   // <--- ADD THIS
+  try {
+
+    const { roomId } = req.params;
+    if (!roomId) return res.status(400).json({ error: "roomId required" });
+
+    const records = await RoomHistory.find({ roomId }).sort({ lastJoined: -1 }).populate({
+      path: "userId",
+      select: "_id name avatar"
+    }).lean();
+
+    // map to user objects (for frontend compatibility)
+    const users = records
+      .map(r => r.userId)
+      .filter(Boolean)
+      .map(u => ({ _id: u._id, name: u.name, avatar: u.avatar }));
+
+    return res.json(users);
+  } catch (err) {
+    console.error("GET /api/rooms/:roomId/history error:", err);
+    return res.status(500).json({ error: "Failed to fetch room history" });
+  }
+});
+
+
 
 app.use("/api/files", fileRoutes);
 app.use("/api/auth", authRoutes);
@@ -871,6 +901,18 @@ io.on("connection", (socket) => {
       const user = await User.findById(socket.userId).select("name avatar");
       if (!user) return;
 
+
+                try {
+      await RoomHistory.findOneAndUpdate(
+        { roomId, userId: socket.userId },
+        { $set: { lastJoined: new Date() } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    } catch (histErr) {
+      console.warn("Failed to write RoomHistory:", histErr);
+    }
+
+    
       socket.join(socket.roomId);
       if (!rooms[socket.roomId]) rooms[socket.roomId] = {};
 

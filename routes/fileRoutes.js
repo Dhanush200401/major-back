@@ -6,6 +6,11 @@ const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const SharedFile = require("../models/SharedFile"); // small metadata collection
 
+
+const API = process.env.REACT_APP_BACKEND_URL;
+
+
+const fileUrl = `${API}/api/files/${payload.fileId}`;
 // Use memory storage so we get buffer and can write to GridFSBucket
 const upload = multer({ storage: multer.memoryStorage() });
 
